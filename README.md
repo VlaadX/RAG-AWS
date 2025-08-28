@@ -39,6 +39,11 @@ Este projeto foi desenvolvido com um conjunto de tecnologias de ponta, focando e
 **Arquitetura Serverless de Baixo Custo**: O custo é estritamente baseado no uso, aproveitando ao máximo o Nível Gratuito da AWS.
 **Base de Conhecimento Customizável**: Adapte a IA para qualquer assunto simplesmente trocando os documentos no bucket S3.
 
+## Arquitetura da Solução
+<div align="center">
+  <img src="https://imgur.com/a/581WfFL.png" alt="fluxo" />
+</div>
+
 ## Configuração e Execução
 
 Para executar este projeto, é necessário configurar o ambiente na AWS (backend) e o cliente local (frontend).
