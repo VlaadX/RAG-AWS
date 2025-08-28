@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG com Voz - AWS (Autoplay)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f0f2f5; margin: 0; padding: 1rem; }
+        #app { background: white; color: #111; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; width: 90%; max-width: 500px; }
+        h1 { color: #007bff; }
+        #recordButton { font-size: 1.2rem; padding: 15px 25px; border-radius: 50px; border: none; cursor: pointer; background-color: #28a745; color: white; transition: background-color 0.3s; }
+        #recordButton.recording { background-color: #dc3545; animation: pulse 1.5s infinite; }
+        #status { margin-top: 1.5rem; font-size: 1rem; color: #6c757d; min-height: 24px; font-weight: bold; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); } }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>Converse com sua IA</h1>
+        <button id="recordButton">🎤 Pressione para Falar</button>
+        <p id="status">Aguardando sua pergunta...</p>
+        </div>
+
+    <script>
+        // URL da sua API Gateway
+        const apiUrl = '';
+
+        const recordButton = document.getElementById('recordButton');
+        const statusDiv = document.getElementById('status');
+        
+        
+        let audioContext;
+
+        const initAudioContext = () => {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                console.log("AudioContext inicializado pelo usuário.");
+            }
+        };
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'pt-BR';
+        recognition.continuous = false;
+
+        recordButton.addEventListener('click', () => {
+            initAudioContext(); 
+            recognition.start();
+        });
+
+        recognition.onstart = () => {
+            recordButton.classList.add('recording');
+            recordButton.textContent = '🎙️ Gravando...';
+            statusDiv.textContent = 'Ouvindo...';
+        };
+
+        recognition.onend = () => {
+            recordButton.classList.remove('recording');
+            recordButton.textContent = '🎤 Pressione para Falar';
+        };
+
+        recognition.onresult = (event) => {
+            const questionText = event.results[0][0].transcript;
+            statusDiv.textContent = `Você disse: "${questionText}". Processando...`;
+            sendTextToAWS(questionText);
+        };
+
+        function base64ToBlob(base64, contentType) {
+            const byteCharacters = atob(base64);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
+            }
+            return new Blob(byteArrays, { type: contentType });
+        }
+
+        async function sendTextToAWS(question) {
+            recordButton.disabled = true;
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+                
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Erro na API.');
+                }
+                
+                const audioBlob = base64ToBlob(data.audioBase64, 'audio/mpeg');
+
+                // Convertemos o Blob para um formato que a Web Audio API entende
+                const arrayBuffer = await audioBlob.arrayBuffer();
+
+                statusDiv.textContent = 'Áudio recebido! Decodificando...';
+                
+                
+                audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(audioContext.destination);
+                    source.start(0); 
+                    statusDiv.textContent = 'Reproduzindo resposta...';
+                    
+                    source.onended = () => {
+                        statusDiv.textContent = 'Aguardando sua pergunta...';
+                    };
+                });
+
+            } catch (error) {
+                statusDiv.textContent = 'Falha ao processar: ' + error.message;
+            } finally {
+                recordButton.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
